@@ -1,0 +1,74 @@
+name: Record FenBrowser WPT snapshot
+
+on:
+  schedule:
+    - cron: "20 1 * * *"
+  workflow_dispatch:
+    inputs:
+      engine_revision:
+        description: FenBrowser branch, tag, or commit to test
+        required: false
+        type: string
+        default: rewrite-history
+
+permissions:
+  contents: write
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fenbrowser-nightly-wpt
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    name: Execute distributed WPT
+    uses: ./.github/workflows/conformance-grid.yml
+    with:
+      engine_revision: ${{ inputs.engine_revision || 'rewrite-history' }}
+
+  record:
+    name: Aggregate and store snapshot
+    needs: execute
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dashboard
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download lane summaries
+        uses: actions/download-artifact@v4
+        with:
+          path: incoming
+          pattern: fen-wpt-lane-*
+          merge-multiple: true
+
+      - name: Aggregate WPT metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/assemble_snapshot.py --incoming incoming --history history --expected-lanes 16
+          python tools/render_portal.py --history history --output public
+
+      - name: Commit historical snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "fenbrowser-wpt-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add history
+          if git diff --cached --quiet; then
+            echo "No new WPT history to commit."
+          else
+            git commit -m "Record automated WPT snapshot"
+            git push origin HEAD:main
+          fi
+
+  publish:
+    name: Publish dashboard
+    needs: record
+    if: always() && needs.record.result == 'success'
+    uses: ./.github/workflows/portal-release.yml

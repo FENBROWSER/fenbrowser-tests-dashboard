@@ -1,0 +1,136 @@
+name: FenBrowser conformance grid
+
+on:
+  workflow_call:
+    inputs:
+      engine_revision:
+        description: FenBrowser branch, tag, or commit to test
+        required: false
+        type: string
+        default: rewrite-history
+  workflow_dispatch:
+    inputs:
+      engine_revision:
+        description: FenBrowser branch, tag, or commit to test
+        required: false
+        type: string
+        default: rewrite-history
+
+permissions:
+  contents: read
+
+jobs:
+  lane:
+    name: WPT lane ${{ matrix.lane }}
+    runs-on: windows-2025
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+    env:
+      LANE_TOTAL: "16"
+      DASHBOARD_TREE: ${{ github.workspace }}\dashboard
+      ENGINE_TREE: ${{ github.workspace }}\engine
+      WPT_TREE: ${{ github.workspace }}\wpt
+      LANE_OUTPUT: ${{ github.workspace }}\results\lane-${{ matrix.lane }}
+
+    steps:
+      - name: Checkout dashboard utilities
+        uses: actions/checkout@v4
+        with:
+          path: dashboard
+
+      - name: Checkout FenBrowser
+        uses: actions/checkout@v4
+        with:
+          repository: FENBROWSER/fenbrowser
+          ref: ${{ inputs.engine_revision }}
+          path: engine
+
+      - name: Checkout Web Platform Tests
+        uses: actions/checkout@v4
+        with:
+          repository: web-platform-tests/wpt
+          path: wpt
+          fetch-depth: 1
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare WPT Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check -r "$env:WPT_TREE\tools\wptrunner\requirements.txt"
+          python -m pip install --disable-pip-version-check -e "$env:ENGINE_TREE\tools\wptrunner-fenbrowser"
+
+      - name: Configure WPT host names
+        shell: pwsh
+        run: |
+          $generatedHosts = Join-Path $env:RUNNER_TEMP "fen-wpt-hosts.txt"
+          python "$env:WPT_TREE\wpt" make-hosts-file | Out-File -FilePath $generatedHosts -Encoding ascii
+          Get-Content $generatedHosts | Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts"
+
+      - name: Build FenBrowser release binaries
+        shell: pwsh
+        run: |
+          dotnet build "$env:ENGINE_TREE\FenBrowser.Host\FenBrowser.Host.csproj" -c Release -p:ContinuousIntegrationBuild=true
+          dotnet build "$env:ENGINE_TREE\FenBrowser.Tooling\FenBrowser.Tooling.csproj" -c Release -p:ContinuousIntegrationBuild=true
+
+      - name: Execute WPT lane
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:LANE_OUTPUT | Out-Null
+          $hostBinary = Join-Path $env:ENGINE_TREE "FenBrowser.Host\bin\Release\net10.0\FenBrowser.Host.exe"
+          $driverLauncher = Join-Path $env:ENGINE_TREE "scripts\wpt-webdriver-launcher.cmd"
+          $toolProject = Join-Path $env:ENGINE_TREE "FenBrowser.Tooling\FenBrowser.Tooling.csproj"
+
+          dotnet run --no-build --project $toolProject -c Release -- `
+            wpt `
+            --root $env:WPT_TREE `
+            --binary $hostBinary `
+            --webdriver-binary $driverLauncher `
+            --processes 3 `
+            --max-restarts 2 `
+            --timeout-seconds 18000 `
+            --stall-timeout-seconds 300 `
+            --manifest-update `
+            --total-chunks $env:LANE_TOTAL `
+            --this-chunk "${{ matrix.lane }}" `
+            --chunk-type id_hash `
+            --output-dir $env:LANE_OUTPUT
+
+          $exitValue = $LASTEXITCODE
+          "FEN_ENGINE_EXIT=$exitValue" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "FenBrowser WPT lane exit code: $exitValue"
+          exit 0
+
+      - name: Produce compact lane summary
+        if: always()
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "lane-${{ matrix.lane }}.json"
+          python "$env:DASHBOARD_TREE\tools\summarize_lane.py" `
+            --source $env:LANE_OUTPUT `
+            --lane "${{ matrix.lane }}" `
+            --engine-exit "${{ env.FEN_ENGINE_EXIT || '1' }}" `
+            --output $destination
+
+      - name: Upload compact WPT data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fen-wpt-lane-${{ matrix.lane }}
+          path: ${{ runner.temp }}\lane-${{ matrix.lane }}.json
+          if-no-files-found: error
+          retention-days: 2
