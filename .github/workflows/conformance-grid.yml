@@ -70,15 +70,19 @@ jobs:
       - name: Prepare WPT Python dependencies
         shell: pwsh
         run: |
-          python -m pip install --disable-pip-version-check --upgrade pip
-          python -m pip install --disable-pip-version-check -r "$env:WPT_TREE\tools\wptrunner\requirements.txt"
-          python -m pip install --disable-pip-version-check -e "$env:ENGINE_TREE\tools\wptrunner-fenbrowser"
+          $wptVenv = Join-Path $env:RUNNER_TEMP "fenbrowser-wpt-venv"
+          python -m venv $wptVenv
+          $wptPython = Join-Path $wptVenv "Scripts\python.exe"
+          & $wptPython -m pip install --disable-pip-version-check --upgrade pip
+          & $wptPython -m pip install --disable-pip-version-check -r "$env:WPT_TREE\tools\wptrunner\requirements.txt"
+          & $wptPython -m pip install --disable-pip-version-check -e "$env:ENGINE_TREE\tools\wptrunner-fenbrowser"
 
       - name: Configure WPT host names
         shell: pwsh
         run: |
+          $wptPython = Join-Path (Join-Path $env:RUNNER_TEMP "fenbrowser-wpt-venv") "Scripts\python.exe"
           $generatedHosts = Join-Path $env:RUNNER_TEMP "fen-wpt-hosts.txt"
-          python "$env:WPT_TREE\wpt" make-hosts-file | Out-File -FilePath $generatedHosts -Encoding ascii
+          & $wptPython "$env:WPT_TREE\wpt" make-hosts-file | Out-File -FilePath $generatedHosts -Encoding ascii
           Get-Content $generatedHosts | Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts"
 
       - name: Build FenBrowser release binaries
@@ -94,12 +98,15 @@ jobs:
           $hostBinary = Join-Path $env:ENGINE_TREE "FenBrowser.Host\bin\Release\net10.0\FenBrowser.Host.exe"
           $driverLauncher = Join-Path $env:ENGINE_TREE "scripts\wpt-webdriver-launcher.cmd"
           $toolProject = Join-Path $env:ENGINE_TREE "FenBrowser.Tooling\FenBrowser.Tooling.csproj"
+          $wptVenv = Join-Path $env:RUNNER_TEMP "fenbrowser-wpt-venv"
 
           dotnet run --no-build --project $toolProject -c Release -- `
             wpt `
             --root $env:WPT_TREE `
             --binary $hostBinary `
             --webdriver-binary $driverLauncher `
+            --venv $wptVenv `
+            --skip-venv-setup `
             --processes 3 `
             --max-restarts 2 `
             --timeout-seconds 18000 `
