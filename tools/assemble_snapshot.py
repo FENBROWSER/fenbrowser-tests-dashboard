@@ -59,6 +59,9 @@ def main():
         int(record["lane"])
         for record in records
         if (not record.get("summaryPresent"))
+        or int(record.get("engineProcessExit") or 0) != 0
+        or record.get("failurePhase")
+        or record.get("infrastructureResultClass")
         or record.get("timedOut")
         or record.get("stalled")
     ]

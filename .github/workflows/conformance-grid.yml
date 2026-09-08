@@ -141,3 +141,59 @@ jobs:
           path: ${{ runner.temp }}\lane-${{ matrix.lane }}.json
           if-no-files-found: error
           retention-days: 2
+
+      - name: Upload lane diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fen-wpt-diagnostics-${{ matrix.lane }}
+          path: ${{ env.LANE_OUTPUT }}\wpt.*.log
+          if-no-files-found: warn
+          retention-days: 2
+
+  aggregate:
+    name: Aggregate WPT run
+    if: always()
+    needs: lane
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout dashboard utilities
+        uses: actions/checkout@v4
+
+      - name: Download lane summaries
+        uses: actions/download-artifact@v4
+        with:
+          path: incoming
+          pattern: fen-wpt-lane-*
+          merge-multiple: true
+
+      - name: Download lane diagnostics
+        uses: actions/download-artifact@v4
+        with:
+          path: diagnostics
+          pattern: fen-wpt-diagnostics-*
+          merge-multiple: false
+
+      - name: Build combined WPT report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/merge_lane_report.py \
+            --incoming incoming \
+            --diagnostics diagnostics \
+            --output-dir combined \
+            --expected-lanes 16 \
+            --run-id "${{ github.run_id }}"
+
+      - name: Publish combined report
+        shell: bash
+        run: cat combined/run-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined WPT report
+        uses: actions/upload-artifact@v4
+        with:
+          name: fen-wpt-run-${{ github.run_id }}
+          path: combined
+          if-no-files-found: error
+          retention-days: 2
