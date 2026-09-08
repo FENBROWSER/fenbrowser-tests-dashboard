@@ -75,6 +75,7 @@ jobs:
           $wptPython = Join-Path $wptVenv "Scripts\python.exe"
           & $wptPython -m pip install --disable-pip-version-check --upgrade pip
           & $wptPython -m pip install --disable-pip-version-check -r "$env:WPT_TREE\tools\wptrunner\requirements.txt"
+          & $wptPython -m pip install --disable-pip-version-check "PyYAML==6.0.2"
           & $wptPython -m pip install --disable-pip-version-check -e "$env:ENGINE_TREE\tools\wptrunner-fenbrowser"
 
       - name: Configure WPT host names
