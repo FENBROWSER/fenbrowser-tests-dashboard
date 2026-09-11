@@ -4,7 +4,7 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 ## What this does
 
-- Runs WPT across 16 parallel lanes on Windows GitHub-hosted runners nightly
+- Runs the whole WPT tree across 64 lanes on Windows GitHub-hosted runners nightly (free on a public repository; the free plan runs 20 lanes at a time)
 - Aggregates results into compact historical snapshots stored in this repo
 - Generates a static dashboard showing pass rates, failures, and trends over time
 
@@ -12,7 +12,7 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 | Workflow | Purpose |
 |----------|---------|
-| `conformance-grid.yml` | Executes 16 WPT lanes in parallel |
+| `conformance-grid.yml` | Executes 64 WPT lanes (`test_paths` selects directories; `/` = whole tree) |
 | `nightly-snapshot.yml` | Runs daily at 01:20 UTC, aggregates results, commits snapshot to `history/` |
 | `portal-release.yml` | Publishes dashboard to GitHub Pages on `main` branch changes |
 
@@ -24,7 +24,8 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 ## Configuration
 
-- **Tested revision**: Defaults to `rewrite-history` branch of `FENBROWSER/fenbrowser` (override via workflow dispatch)
+- **Tested revision**: Defaults to the `newinterpreter` branch of `FENBROWSER/fenbrowser-test` (override via workflow dispatch); `test_paths` selects the WPT directories (comma-separated)
+- **GL on hosted runners**: they have no OpenGL driver; the engine ships an x64 ANGLE beside its binaries and creates the headless GL context through EGL, so no runner-side provisioning is needed
 - **Runners**: Windows (FenBrowser's WPT launcher is Windows-only)
 - **Storage**: Keeps lane artifacts for 2 days; long-term history is committed JSON in `history/`
 
