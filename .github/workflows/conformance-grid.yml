@@ -7,14 +7,24 @@ on:
         description: FenBrowser branch, tag, or commit to test
         required: false
         type: string
-        default: rewrite-history
+        default: newinterpreter
+      test_paths:
+        description: Comma-separated WPT paths to run (the engine's own default is only dom/)
+        required: false
+        type: string
+        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
   workflow_dispatch:
     inputs:
       engine_revision:
         description: FenBrowser branch, tag, or commit to test
         required: false
         type: string
-        default: rewrite-history
+        default: newinterpreter
+      test_paths:
+        description: Comma-separated WPT paths to run (the engine's own default is only dom/)
+        required: false
+        type: string
+        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
 
 permissions:
   contents: read
@@ -43,12 +53,18 @@ jobs:
         with:
           path: dashboard
 
+      # fenbrowser-test is private; the workflow's own GITHUB_TOKEN cannot read
+      # it. ENGINE_CHECKOUT_TOKEN is a fine-grained PAT with contents:read on
+      # that repository. Nothing pushes back, so the token is not left in the
+      # checkout's git config.
       - name: Checkout FenBrowser
         uses: actions/checkout@v4
         with:
-          repository: FENBROWSER/fenbrowser
+          repository: FENBROWSER/fenbrowser-test
           ref: ${{ inputs.engine_revision }}
           path: engine
+          token: ${{ secrets.ENGINE_CHECKOUT_TOKEN || github.token }}
+          persist-credentials: false
 
       - name: Checkout Web Platform Tests
         uses: actions/checkout@v4
@@ -94,6 +110,9 @@ jobs:
 
       - name: Execute WPT lane
         shell: pwsh
+        # Run from the engine tree so the lane summary records the engine
+        # revision rather than "unavailable".
+        working-directory: ${{ github.workspace }}\engine
         run: |
           New-Item -ItemType Directory -Force -Path $env:LANE_OUTPUT | Out-Null
           $hostBinary = Join-Path $env:ENGINE_TREE "FenBrowser.Host\bin\Release\net10.0\FenBrowser.Host.exe"
@@ -116,6 +135,7 @@ jobs:
             --total-chunks $env:LANE_TOTAL `
             --this-chunk "${{ matrix.lane }}" `
             --chunk-type id_hash `
+            --tests "${{ inputs.test_paths }}" `
             --output-dir $env:LANE_OUTPUT
 
           $exitValue = $LASTEXITCODE

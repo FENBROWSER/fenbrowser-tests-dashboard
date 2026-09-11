@@ -9,7 +9,12 @@ on:
         description: FenBrowser branch, tag, or commit to test
         required: false
         type: string
-        default: rewrite-history
+        default: newinterpreter
+      test_paths:
+        description: Comma-separated WPT paths to run
+        required: false
+        type: string
+        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
 
 permissions:
   contents: write
@@ -25,8 +30,10 @@ jobs:
   execute:
     name: Execute distributed WPT
     uses: ./.github/workflows/conformance-grid.yml
+    secrets: inherit
     with:
-      engine_revision: ${{ inputs.engine_revision || 'rewrite-history' }}
+      engine_revision: ${{ inputs.engine_revision || 'newinterpreter' }}
+      test_paths: ${{ inputs.test_paths || 'dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/' }}
 
   record:
     name: Aggregate and store snapshot

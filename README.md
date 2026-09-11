@@ -24,7 +24,8 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 ## Configuration
 
-- **Tested revision**: Defaults to `rewrite-history` branch of `FENBROWSER/fenbrowser` (override via workflow dispatch)
+- **Tested revision**: Defaults to the `newinterpreter` branch of `FENBROWSER/fenbrowser-test` (override via workflow dispatch); `test_paths` selects the WPT directories (comma-separated)
+- **GL on hosted runners**: they have no OpenGL driver; the engine ships an x64 ANGLE beside its binaries and creates the headless GL context through EGL, so no runner-side provisioning is needed
 - **Runners**: Windows (FenBrowser's WPT launcher is Windows-only)
 - **Storage**: Keeps lane artifacts for 2 days; long-term history is committed JSON in `history/`
 
