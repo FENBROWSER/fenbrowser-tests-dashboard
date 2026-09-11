@@ -9,10 +9,10 @@ on:
         type: string
         default: newinterpreter
       test_paths:
-        description: Comma-separated WPT paths to run (the engine's own default is only dom/)
+        description: Comma-separated WPT paths to run; / runs the whole tree (the engine's own default is only dom/)
         required: false
         type: string
-        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
+        default: /
   workflow_dispatch:
     inputs:
       engine_revision:
@@ -21,10 +21,10 @@ on:
         type: string
         default: newinterpreter
       test_paths:
-        description: Comma-separated WPT paths to run (the engine's own default is only dom/)
+        description: Comma-separated WPT paths to run; / runs the whole tree (the engine's own default is only dom/)
         required: false
         type: string
-        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
+        default: /
 
 permissions:
   contents: read
@@ -36,12 +36,16 @@ jobs:
     timeout-minutes: 330
     strategy:
       fail-fast: false
-      max-parallel: 16
+      # 64 lanes keep each lane inside the job limit for the whole tree
+      # (~140 lane-hours today). The free plan runs 20 jobs at a time, so the
+      # lanes go in waves; the run still finishes overnight and costs nothing
+      # on a public repository.
+      max-parallel: 64
       matrix:
-        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64]
 
     env:
-      LANE_TOTAL: "16"
+      LANE_TOTAL: "64"
       DASHBOARD_TREE: ${{ github.workspace }}\dashboard
       ENGINE_TREE: ${{ github.workspace }}\engine
       WPT_TREE: ${{ github.workspace }}\wpt
@@ -108,6 +112,23 @@ jobs:
           dotnet build "$env:ENGINE_TREE\FenBrowser.Host\FenBrowser.Host.csproj" -c Release -p:ContinuousIntegrationBuild=true
           dotnet build "$env:ENGINE_TREE\FenBrowser.Tooling\FenBrowser.Tooling.csproj" -c Release -p:ContinuousIntegrationBuild=true
 
+      # wptrunner takes test paths relative to the tree and does not accept the
+      # root itself, so "/" becomes the list of every top-level test directory.
+      - name: Resolve WPT test paths
+        shell: pwsh
+        run: |
+          $requested = "${{ inputs.test_paths }}".Trim()
+          if ($requested -eq "/" -or $requested -eq "") {
+            # third_party holds the WebGL/WebGPU conformance suites (50k+ tests);
+            # they are not part of the web-platform picture this dashboard tracks.
+            $skip = @("tools", "resources", "common", "docs", "fonts", "images", "media", "third_party")
+            $requested = (Get-ChildItem -Path $env:WPT_TREE -Directory |
+              Where-Object { $_.Name -notlike ".*" -and $skip -notcontains $_.Name } |
+              ForEach-Object { "$($_.Name)/" }) -join ","
+          }
+          "WPT_TEST_PATHS=$requested" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WPT test paths: $requested"
+
       - name: Execute WPT lane
         shell: pwsh
         # Run from the engine tree so the lane summary records the engine
@@ -135,7 +156,7 @@ jobs:
             --total-chunks $env:LANE_TOTAL `
             --this-chunk "${{ matrix.lane }}" `
             --chunk-type id_hash `
-            --tests "${{ inputs.test_paths }}" `
+            --tests "$env:WPT_TEST_PATHS" `
             --output-dir $env:LANE_OUTPUT
 
           $exitValue = $LASTEXITCODE
@@ -204,7 +225,7 @@ jobs:
             --incoming incoming \
             --diagnostics diagnostics \
             --output-dir combined \
-            --expected-lanes 16 \
+            --expected-lanes 64 \
             --run-id "${{ github.run_id }}"
 
       - name: Publish combined report

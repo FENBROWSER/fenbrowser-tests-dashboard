@@ -11,10 +11,10 @@ on:
         type: string
         default: newinterpreter
       test_paths:
-        description: Comma-separated WPT paths to run
+        description: Comma-separated WPT paths to run; / runs the whole tree
         required: false
         type: string
-        default: dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/
+        default: /
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
     secrets: inherit
     with:
       engine_revision: ${{ inputs.engine_revision || 'newinterpreter' }}
-      test_paths: ${{ inputs.test_paths || 'dom/,html/,fetch/,xhr/,url/,encoding/,FileAPI/,IndexedDB/,WebCryptoAPI/,streams/,webstorage/,cssom/,cssom-view/,selection/' }}
+      test_paths: ${{ inputs.test_paths || '/' }}
 
   record:
     name: Aggregate and store snapshot
@@ -57,7 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/assemble_snapshot.py --incoming incoming --history history --expected-lanes 16
+          python tools/assemble_snapshot.py --incoming incoming --history history --expected-lanes 64
           python tools/render_portal.py --history history --output public
 
       - name: Commit historical snapshot

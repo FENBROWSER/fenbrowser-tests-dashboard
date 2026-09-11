@@ -4,7 +4,7 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 ## What this does
 
-- Runs WPT across 16 parallel lanes on Windows GitHub-hosted runners nightly
+- Runs the whole WPT tree across 64 lanes on Windows GitHub-hosted runners nightly (free on a public repository; the free plan runs 20 lanes at a time)
 - Aggregates results into compact historical snapshots stored in this repo
 - Generates a static dashboard showing pass rates, failures, and trends over time
 
@@ -12,7 +12,7 @@ Automated Web Platform Tests (WPT) runner for FenBrowser that publishes a public
 
 | Workflow | Purpose |
 |----------|---------|
-| `conformance-grid.yml` | Executes 16 WPT lanes in parallel |
+| `conformance-grid.yml` | Executes 64 WPT lanes (`test_paths` selects directories; `/` = whole tree) |
 | `nightly-snapshot.yml` | Runs daily at 01:20 UTC, aggregates results, commits snapshot to `history/` |
 | `portal-release.yml` | Publishes dashboard to GitHub Pages on `main` branch changes |
 
