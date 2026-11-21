@@ -38,7 +38,10 @@ def build_report(records, expected_lanes, run_id):
         int(record["lane"])
         for record in records
         if (not record.get("summaryPresent"))
-        or int(record.get("engineProcessExit") or 0) != 0
+        # wptrunner exits 1 when tests had unexpected results, which is the
+        # normal outcome; only other non-zero codes (64 = usage/startup) mean
+        # the lane itself broke. Startup failures also set failurePhase.
+        or int(record.get("engineProcessExit") or 0) not in (0, 1)
         or record.get("failurePhase")
         or record.get("infrastructureResultClass")
         or record.get("timedOut")
